@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from typing import Literal, List, Optional
 import torch
 from botorch.models import SingleTaskGP
-from botorch.fit import fit_gpytorch_model
+from botorch.fit import fit_gpytorch_mll
 from gpytorch.mlls import ExactMarginalLogLikelihood
 from botorch.acquisition import ExpectedImprovement, UpperConfidenceBound, ProbabilityOfImprovement
 from botorch.optim import optimize_acqf
@@ -118,26 +118,26 @@ def submit(result: BatchResult):
     }
 
 
-@app.get("/suggest")
-def suggest(batch_size: int = 4):
-    global gp_model, train_x, train_y
-    # 1) if first call, do Sobol init:
-    if train_x.shape[0] < 8:
-        # draw Sobol samples in your bounds
-        new_x = draw_sobol_samples(bounds=param_bounds, n=batch_size).to(dtype=torch.double)
-    else:
-        # 2) fit GP, define acquisition (e.g. qNEI), call optimize
-        gp_model = fit_gpytorch_model(ExactMarginalLogLikelihood(gp_model.likelihood, gp_model))
-        new_x, _ = optimize_acqf(
-            acq_function=qNoisyExpectedImprovement(model=gp_model, X_baseline=train_x),
-            bounds=param_bounds,
-            q=batch_size,
-            num_restarts=10,
-            raw_samples=256,
-        )
-    # convert to plain lists
-    pts = new_x.cpu().tolist()
-    return {"candidates": pts}
+# @app.get("/suggest")
+# def suggest(batch_size: int = 4):
+#     global gp_model, train_x, train_y
+#     # 1) if first call, do Sobol init:
+#     if train_x.shape[0] < 8:
+#         # draw Sobol samples in your bounds
+#         new_x = draw_sobol_samples(bounds=param_bounds, n=batch_size).to(dtype=torch.double)
+#     else:
+#         # 2) fit GP, define acquisition (e.g. qNEI), call optimize
+#         gp_model = fit_gpytorch_model(ExactMarginalLogLikelihood(gp_model.likelihood, gp_model))
+#         new_x, _ = optimize_acqf(
+#             acq_function=qNoisyExpectedImprovement(model=gp_model, X_baseline=train_x),
+#             bounds=param_bounds,
+#             q=batch_size,
+#             num_restarts=10,
+#             raw_samples=256,
+#         )
+#     # convert to plain lists
+#     pts = new_x.cpu().tolist()
+#     return {"candidates": pts}
 
 @app.post("/get_suggestion")
 def get_suggestion(config: BOConfig):
@@ -165,7 +165,7 @@ def get_suggestion(config: BOConfig):
 
         model = SingleTaskGP(X, Y)
         mll = ExactMarginalLogLikelihood(model.likelihood, model)
-        fit_gpytorch_model(mll)
+        fit_gpytorch_mll(mll)
 
         # Select acquisition function
         if config.acquisition == "ei":

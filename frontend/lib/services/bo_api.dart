@@ -6,10 +6,12 @@ import 'dart:async';
 // Ensure you have defined Parameter in lib/models/parameter.dart:
 // class Parameter { final String name; final double min, max; Map<String,dynamic> toJson() => {'name':name,'min':min,'max':max}; }
 import '../models/parameter.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 /// Service class for communicating with the Bayesian Optimization backend
 class BoApi {
-  static const String _baseUrl = 'http://localhost:8000';
+  static final String _baseUrl = dotenv.env['API_BASE_URL']!;
+  // static const String _baseUrl = 'http://localhost:8000';
 
   /// Fetches next single candidate point via POST /get_suggestion
   static Future<List<double>> fetchNextSuggestion(

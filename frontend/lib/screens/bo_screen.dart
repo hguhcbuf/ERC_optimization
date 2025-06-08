@@ -310,7 +310,8 @@ class _BOScreenState extends State<BOScreen> {
       // 5) 다음 최적화 배치 요청
       await _runOptimization();
     } catch (e) {
-      debugPrint('🚨 submitScore error: $e');
+      debugPrint('submitScore error: $e');
+      _appendLog('submitScore error: $e');
     } finally {
       setState(() => _loading = false);
     }

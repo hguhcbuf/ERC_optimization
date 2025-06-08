@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'screens/bo_screen.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-void main() {
+Future<void> main() async {
+  // 1) .env 파일 로드 (프로젝트 루트의 .env)
+  await dotenv.load(fileName: ".env");
+
   runApp(const BOApp());
 }
 
