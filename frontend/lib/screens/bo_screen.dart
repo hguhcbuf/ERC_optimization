@@ -53,6 +53,16 @@ class _BOScreenState extends State<BOScreen> {
     'optimization log 2',
     'optimization log 3',
   ];
+
+  // bo 설정 부분
+  final List<String> parameterOptions = [
+    'Line Speed',
+    'Standoff Distance',
+    'Extrusion Pressure',
+    'Reservior Temperature',
+    'Ink Viscosity',
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -154,15 +164,6 @@ class _BOScreenState extends State<BOScreen> {
     // 예시: 콘솔 출력 또는 향후 기능 확장
     print('Selected sidebar item: $selectedItem');
   }
-
-  // bo 설정 부분
-  final List<String> parameterOptions = [
-    'Line Speed',
-    'Standoff Distance',
-    'Extrusion Pressure',
-    'Reservior Temperature',
-    'Ink Viscosity',
-  ];
 
   int objectiveCount = 1;
   int parameterCount = 1;
@@ -494,7 +495,7 @@ class _BOScreenState extends State<BOScreen> {
                               flex: 3,
                               child: Padding(
                                 padding: const EdgeInsets.all(12.0),
-                                child: EquipmentStatus(result: result),
+                                child: EquipmentStatus(),
                               ),
                             ),
                           ],
@@ -520,7 +521,6 @@ class _BOScreenState extends State<BOScreen> {
                   ),
 
                   const Divider(height: 32),
-                  EquipmentStatus(result: result),
                 ],
               ),
             );

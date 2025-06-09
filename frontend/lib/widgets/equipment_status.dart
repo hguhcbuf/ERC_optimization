@@ -1,37 +1,66 @@
 import 'package:flutter/material.dart';
 
 class EquipmentStatus extends StatelessWidget {
-  final Map<String, dynamic>? result;
+  const EquipmentStatus({super.key});
 
-  const EquipmentStatus({super.key, this.result});
+  void handleStop() {
+    print("Stop pressed");
+    // TODO: FastAPI Stop API 호출
+  }
+
+  void handleInitialize() {
+    print("Initialize pressed");
+    // TODO: FastAPI Initialize API 호출
+  }
 
   @override
   Widget build(BuildContext context) {
-    if (result == null || result!['history'] == null) {
-      return const Center(
-        child: Text(
-          'No equipments registered',
-          style: TextStyle(fontSize: 16, fontStyle: FontStyle.italic),
+    return Column(
+      children: [
+        // 좌우 버튼
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+          child: Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: handleStop,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color.fromARGB(255, 172, 11, 2),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 32.0,
+                    ), // 버튼 높이
+                  ),
+                  child: const Text(
+                    'Stop',
+                    style: TextStyle(fontSize: 26), // 글자 크기
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16.0), // 버튼 사이 간격
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: handleInitialize,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    padding: const EdgeInsets.symmetric(vertical: 32.0),
+                  ),
+                  child: const Text(
+                    'Initialize',
+                    style: TextStyle(fontSize: 26),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
-      );
-    }
-
-    // 🔥 일단 더미 heatmap 모양으로 대체
-    // (나중에 진짜 heatmap 데이터 나오면 수정)
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey),
-        borderRadius: BorderRadius.circular(8),
-        color: Colors.blue[50],
-      ),
-      padding: const EdgeInsets.all(12.0),
-      child: const Center(
-        child: Text(
-          'Acquisition Function Heatmap\n(Placeholder)',
-          textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 24),
+        const Center(
+          child: Text(
+            '-',
+            style: TextStyle(fontSize: 16, fontStyle: FontStyle.italic),
+          ),
         ),
-      ),
+      ],
     );
   }
 }
