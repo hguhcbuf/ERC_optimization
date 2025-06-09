@@ -5,3 +5,7 @@ torch
 botorch
 gpytorch
 python-dotenv
+pyserial
+pyads
+bayesian-optimization
+pandas

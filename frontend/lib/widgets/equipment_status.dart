@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../services/pressure_api.dart';
+import 'dart:async';
 
 class EquipmentStatus extends StatelessWidget {
   const EquipmentStatus({super.key});
@@ -23,9 +25,8 @@ class EquipmentStatus extends StatelessWidget {
     // TODO: FastAPI Move Execute API 호출
   }
 
-  void handleSpray(double pressure) {
-    print("Spray with pressure $pressure pressed");
-    // TODO: FastAPI Spray API 호출
+  void changePressurePressed(double pressure) async {
+    await PressureApi.changePressure(pressure);
   }
 
   void handleCapture() {
@@ -33,10 +34,9 @@ class EquipmentStatus extends StatelessWidget {
     // TODO: FastAPI Capture API 호출
   }
 
-  void handleExtrude() {
-    print("Extrude pressed");
-    // TODO: FastAPI Extrude API 호출
-  }
+  // void handleExtrude() async {
+  //   await PressureApi.extrudeOn();
+  // }
 
   void handleLoop() {
     print("Loop pressed");
@@ -196,7 +196,7 @@ class EquipmentStatus extends StatelessWidget {
                   onPressed: () {
                     final pressure = double.tryParse(pressureController.text);
                     if (pressure != null) {
-                      handleSpray(pressure);
+                      changePressurePressed(pressure);
                     } else {
                       print("Invalid pressure value");
                     }
@@ -221,12 +221,28 @@ class EquipmentStatus extends StatelessWidget {
             ),
             child: SizedBox(
               width: double.infinity,
-              child: ElevatedButton(
-                onPressed: handleExtrude,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 24.0),
+              child: GestureDetector(
+                onTapDown: (_) async {
+                  await PressureApi.extrudeOn();
+                },
+                onTapUp: (_) async {
+                  await PressureApi.extrudeOff();
+                },
+                onTapCancel: () async {
+                  // 드래그로 취소되는 경우도 잡기
+                  await PressureApi.extrudeOff();
+                },
+                child: Container(
+                  width: 200,
+                  height: 50,
+                  color: Theme.of(context).colorScheme.primary,
+                  child: Center(
+                    child: Text(
+                      'Extrude',
+                      style: TextStyle(color: Colors.white, fontSize: 20),
+                    ),
+                  ),
                 ),
-                child: const Text('Extrude', style: TextStyle(fontSize: 20)),
               ),
             ),
           ),

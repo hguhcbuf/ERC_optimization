@@ -22,3 +22,6 @@ class Measurement(BaseModel):
 class BatchResult(BaseModel):
     candidates: List[List[float]]
     scores: List[float]
+
+class PressureRequest(BaseModel):
+    pressure: float
