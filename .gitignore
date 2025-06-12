@@ -3,3 +3,4 @@ optimization_backend/venv/
 frontend/.env
 __pycache__/
 *.pyc
+venv/
