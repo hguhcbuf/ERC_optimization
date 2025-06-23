@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routes import bo_routes
-from routes import pressure_routes
+from routes import jogger_routes
+from routes import image_routes
 
 app = FastAPI()
 
@@ -14,4 +15,5 @@ app.add_middleware(
 )
 
 app.include_router(bo_routes.router)
-app.include_router(pressure_routes.router, prefix="/pressure")
+app.include_router(jogger_routes.router, prefix="/jogger")
+app.include_router(image_routes.router, prefix="/image")

@@ -13,7 +13,7 @@ def _assert_in_range(x: float, y: float, *, tag: str = "") -> None:
     if not (0.0 <= x <= 200.0) or not (0.0 <= y <= 520.0):
         raise PathOutOfRangeError(
             f"{tag} 좌표가 범위를 벗어났습니다: x={x}, y={y} "
-            "(허용: x 0–200, y 0–520)"
+            "(허용: x 0-200, y 0-520)"
         )
 
 
@@ -24,7 +24,7 @@ def shift_path(
 ) -> List[Tuple[float, float, float, float, float, float, int, int]]:
     """
     x·y 좌표를 각각 move_x, move_y 만큼 평행이동한 새 path 리스트를 반환한다.
-    - 이동 전·후 어느 지점이라도 허용 범위( x 0–200, y 0–520 )를 벗어나면
+    - 이동 전·후 어느 지점이라도 허용 범위( x 0-200, y 0-520 )를 벗어나면
       PathOutOfRangeError 예외를 발생시킨다.
     """
     shifted: List[Tuple[float, float, float, float, float, float, int, int]] = []

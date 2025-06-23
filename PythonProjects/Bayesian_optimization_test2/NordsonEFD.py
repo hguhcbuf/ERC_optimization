@@ -16,7 +16,7 @@ class NordsonEFD:
     _Failed = 'A2'
 
 
-    def __init__(self, port='COM4', baudrate=115200, timeout=1):
+    def __init__(self, port='COM5', baudrate=115200, timeout=1):
 
         
         self._Serial = serial.Serial(port=port, baudrate=baudrate, parity="N", stopbits=1, bytesize=8, timeout=timeout)

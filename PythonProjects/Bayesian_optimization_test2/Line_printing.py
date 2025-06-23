@@ -4,8 +4,10 @@ import time
 from Shift_path import shift_path
 import Shift_path
 
-# inst = NordsonEFD(port='COM4', baudrate=115200, timeout=1)
-# inst.SetPressure(50)
+# inst = NordsonEFD(port='COM5', baudrate=115200, timeout=1)
+# inst.SetPressure(40)
+# print(inst.ReadPressure())
+# print(inst.ReadPressure())
 
 
 #extrude mode : 0 : no extrude, 1: extrude on - extrude off, 2 : extrude off - extrude on, 3 : extrude on - extrude on
@@ -90,10 +92,10 @@ def set_line_path_points(origin_z, standoff_distance, line_velocity):
 
 
 
-path_points_1 = [
-        ( 100,  390,  15, 30.0, 30.0, 20.0,  0, 0),
-]
-run_path(path_points_1)
+# path_points_1 = [
+#         ( 100,  390,  15, 30.0, 30.0, 20.0,  0, 0),
+# ]
+# run_path(path_points_1)
 
 # time.sleep(10)
 # run_path(path_points_2)
@@ -109,7 +111,7 @@ def print_line_by_iter(iter_num: int, origin_z, standoff_distance, line_velocity
 
     # 행(row)·열(col) 인덱스 계산
     col = (iter_num - 1) % 17         # 0‒16  →  x 0‒160
-    row = (iter_num - 1) // 17        # 0‒4   →  y 0‒120
+    row = (iter_num - 1) // 17        # 0‒5   →  y 0‒120
 
     dx = col * 10                     # 10 mm 간격
     dy = row * 30                     # 30 mm 간격
@@ -121,6 +123,6 @@ def print_line_by_iter(iter_num: int, origin_z, standoff_distance, line_velocity
     
 
 # origin_z = 15
-# standoff_distance = 0
+# standoff_distance = 0.2
 # line_velocity = 10
 # print_line_by_iter(1, origin_z, standoff_distance, line_velocity)

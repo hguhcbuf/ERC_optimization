@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/printing_section_dialog.dart';
 
 class BOControlPanel extends StatefulWidget {
   final String acquisition;
@@ -389,16 +390,12 @@ class BOControlPanelState extends State<BOControlPanel> {
           onChanged: widget.onAcquisitionChanged,
           items: [
             DropdownMenuItem(
-              value: 'ei',
-              child: Text('Expected Improvement (EI)', style: textStyle),
-            ),
-            DropdownMenuItem(
               value: 'ucb',
-              child: Text('Upper Confidence Bound (UCB)', style: textStyle),
+              child: Text('UCB', style: textStyle),
             ),
             DropdownMenuItem(
-              value: 'pi',
-              child: Text('Probability of Improvement (PI)', style: textStyle),
+              value: 'qLogNEHVI',
+              child: Text('qLogNEHVI', style: textStyle),
             ),
           ],
         ),
@@ -461,6 +458,18 @@ class BOControlPanelState extends State<BOControlPanel> {
         ),
 
         const SizedBox(height: 24),
+        ElevatedButton(
+          onPressed: () {
+            showDialog(
+              context: context,
+              builder: (context) => const PrintingSectionDialog(),
+            );
+          },
+          child: const Text("Printing Section Configuration"),
+        ),
+
+        const SizedBox(height: 16),
+
         ElevatedButton(
           onPressed: canRun ? () => widget.onSuggest() : null,
           child:

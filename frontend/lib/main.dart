@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/screens/main_tabBar_screen.dart';
 import 'screens/bo_screen.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
@@ -20,7 +21,7 @@ class BOApp extends StatelessWidget {
       theme: ThemeData(
         brightness: Brightness.dark, // 🌙 다크 테마 사용
         useMaterial3: false,
-        scaffoldBackgroundColor: const Color(0xFF1E1E2E), // 🖤 메인 배경
+        scaffoldBackgroundColor: const Color(0xFF1E1E2E),
         appBarTheme: const AppBarTheme(
           backgroundColor: Color(0xFF2B2B3A), // 헤더 다크
           foregroundColor: Colors.white,
@@ -37,7 +38,7 @@ class BOApp extends StatelessWidget {
           onSurface: Colors.white70, // 일반 텍스트
         ),
       ),
-      home: const BOScreen(),
+      home: const MainTabBarScreen(),
     );
   }
 }

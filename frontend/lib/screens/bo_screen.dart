@@ -2,21 +2,27 @@ import 'package:flutter/material.dart';
 import '../widgets/result_chart.dart';
 import '../widgets/device_status_widget.dart';
 import '../widgets/bo_control_panel.dart';
-import '../widgets/equipment_status.dart';
-import '../widgets/sidebar_widget.dart';
+import '../widgets/calculate_score_widget.dart';
 import '../services/bo_api.dart';
 import 'dart:math';
 import '../models/parameter.dart';
+import '../services/line_auto_bo_api.dart';
+import 'package:eventsource/eventsource.dart';
+import 'dart:html' as html;
+import 'dart:convert';
+import '../controllers/keyence_image_controller.dart';
 
 class BOScreen extends StatefulWidget {
   const BOScreen({super.key});
 
   @override
-  State<BOScreen> createState() => _BOScreenState();
+  State<BOScreen> createState() => BOScreenState();
 }
 
-class _BOScreenState extends State<BOScreen> {
-  String acquisition = 'ei';
+class BOScreenState extends State<BOScreen> with WidgetsBindingObserver {
+  html.EventSource? _es; // ← SSE 핸들
+
+  String acquisition = 'ucb';
   final GlobalKey<BOControlPanelState> _panelKey =
       GlobalKey<BOControlPanelState>();
   int _evalCount = 0;
@@ -42,33 +48,23 @@ class _BOScreenState extends State<BOScreen> {
     'IR Camera': 2,
   };
 
-  // Sidebar 부분
-
-  bool _isSidebarVisible = true;
-
-  final TextEditingController searchController = TextEditingController();
-  List<String> filteredMenuLists = [];
-  List<String> sidebarMenuLists = [
-    'optimization log 1',
-    'optimization log 2',
-    'optimization log 3',
-  ];
-
   // bo 설정 부분
   final List<String> parameterOptions = [
     'Line Speed',
     'Standoff Distance',
     'Extrusion Pressure',
-    'Reservior Temperature',
-    'Ink Viscosity',
   ];
 
   @override
   void initState() {
     super.initState();
-    filteredMenuLists = sidebarMenuLists; // 처음에는 모두 보이게
-    searchController.addListener(applySearchFilter); // 검색창 리스너 등록
-    BoApi.resetBackend();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    _es?.close(); // 화면 사라질 때 연결 닫기
+    super.dispose();
   }
 
   //debug log 보여주기
@@ -92,77 +88,22 @@ class _BOScreenState extends State<BOScreen> {
     });
   }
 
-  void handleAddNewOptimization() async {
-    String? newName = await showDialog<String>(
-      context: context,
-      builder: (context) {
-        final TextEditingController nameController = TextEditingController();
-        return AlertDialog(
-          title: const Text('새 최적화 로그 추가'),
-          content: TextField(
-            controller: nameController,
-            decoration: const InputDecoration(hintText: '파일명 입력'),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop(); // 아무것도 추가 안함
-              },
-              child: const Text('취소'),
-            ),
-            TextButton(
-              onPressed: () {
-                final text = nameController.text.trim();
-                if (text.isNotEmpty) {
-                  Navigator.of(context).pop(text); // 입력한 텍스트 반환
-                }
-              },
-              child: const Text('추가'),
-            ),
-          ],
-        );
-      },
-    );
+  void _handleSuggest() {
+    final config = _panelKey.currentState?.gatherConfig();
+    print(config);
+    if (config == null) return;
 
-    if (newName != null && newName.isNotEmpty) {
-      setState(() {
-        sidebarMenuLists.add(newName);
-        applySearchFilter(); // 검색필터 리스트도 새로고침
-      });
+    final method = config['objectives'][0]['method'];
+
+    if (method == 'manual') {
+      _runOptimization();
+    } else if (method == 'bus 1') {
+      print('bus 1 선택됨');
+
+      _startSSEOptimization();
+    } else if (method == 'bus 2') {
+      print('bus 2');
     }
-  }
-
-  void applySearchFilter() {
-    final query = searchController.text.toLowerCase();
-    setState(() {
-      filteredMenuLists =
-          sidebarMenuLists.where((item) {
-            return item.toLowerCase().contains(query);
-          }).toList();
-    });
-  }
-
-  @override
-  void dispose() {
-    searchController.dispose();
-    super.dispose();
-  }
-
-  List<String> openedTabs = []; // 열려 있는 탭 목록
-  String activeTab = ''; // 현재 선택된 탭
-
-  void handleItemSelected(String itemName) {
-    setState(() {
-      if (!openedTabs.contains(itemName)) {
-        openedTabs.add(itemName);
-      }
-      activeTab = itemName;
-    });
-  }
-
-  void handleSidebarSelection(String selectedItem) {
-    // 예시: 콘솔 출력 또는 향후 기능 확장
-    print('Selected sidebar item: $selectedItem');
   }
 
   int objectiveCount = 1;
@@ -318,6 +259,81 @@ class _BOScreenState extends State<BOScreen> {
     }
   }
 
+  //-----------------------------auto line bo test---------------------------------
+
+  void _startSSEOptimization() {
+    print('🟢 _startSSEOptimization 진입');
+
+    // 0) 이전 연결 닫기
+    _es?.close();
+    _es = null;
+    setState(() => _history.clear());
+
+    // 1) 새 EventSource 연결
+    _es = html.EventSource('http://localhost:8000/run_optimization');
+
+    _es!.onOpen.listen((_) => print('🌐 EventSource OPENED'));
+
+    // 2) 메시지 수신
+    _es!.onMessage.listen((e) {
+      if (_lastConfig == null) {
+        _setDefaultConfig(); // 아래 함수 정의
+      }
+      print('📡 raw = ${e.data}'); // ← 원본 문자열
+
+      final data = jsonDecode(e.data as String);
+      print('👉 parsed = $data'); // ← 파싱 후 Map
+
+      final entry = {
+        'iteration': data['iter'],
+        'areal error': data['score'],
+        'Standoff Distance': data['standoff_distance'],
+        'Line Speed': data['line_velocity'],
+        'Extrusion Pressure': data['pressure'],
+      };
+
+      setState(() => _history.add(entry));
+      keyenceImageController.reload();
+
+      // 3) history 상태 로그
+      final last = _history.last;
+      _appendLog('history.len=${_history.length}  last=$last');
+      print('⚡ history.len=${_history.length}  last=$last');
+    });
+
+    // 4) 오류·종료
+    _es!.onError.listen((e) {
+      print('🚨 SSE error: $e  (readyState=${_es!.readyState})');
+      _es?.close();
+      _es = null;
+    });
+  }
+
+  // 임시 데모 용도 더미 사용-------------------------------------
+  void _setDefaultConfig() {
+    _lastConfig = {
+      'iterations': 40,
+      'objectives': [
+        {'name': 'areal error', 'direction': 'Minimize'},
+      ],
+      'parameters': [
+        {'name': 'Standoff Distance', 'min': 0.1, 'max': 0.5},
+        {'name': 'Line Speed', 'min': 2.0, 'max': 40.0},
+        {'name': 'Extrusion Pressure', 'min': 250, 'max': 450},
+      ],
+    };
+    _appendLog(
+      '--------------------------------------------------------------------------------------------------------------------',
+    );
+    _appendLog('gathered config #${_lastConfig}');
+    _appendLog(
+      '--------------------------------------------------------------------------------------------------------------------',
+    );
+  }
+  // ----------------------------------------------------------
+
+  final keyenceImageController = KeyenceImageController();
+
   @override
   Widget build(BuildContext context) {
     final history = _history;
@@ -351,44 +367,11 @@ class _BOScreenState extends State<BOScreen> {
             return Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 🔸 사이드 영역: 버튼 + (사이드바가 보일 때만 내용)
-                SidebarWidget(
-                  isSidebarVisible: _isSidebarVisible,
-                  searchController: searchController,
-                  onToggle:
-                      () => setState(
-                        () => _isSidebarVisible = !_isSidebarVisible,
-                      ),
-                  onAdd: handleAddNewOptimization,
-                  filteredMenuLists: filteredMenuLists,
-                  onSelect: handleSidebarSelection,
-                ),
-
                 // 🔥 메인 화면
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // 상단 Device Status
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            const Text(
-                              'Device Status',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            DeviceStatusWidget(statusCodes: deviceStatusCodes),
-                          ],
-                        ),
-                      ),
-                      const Divider(),
-
                       // 하단 3등분 레이아웃
                       Expanded(
                         child: Row(
@@ -414,7 +397,7 @@ class _BOScreenState extends State<BOScreen> {
                                           loading: loading,
                                           scoreController: scoreController,
                                           onSuggest: () {
-                                            _runOptimization();
+                                            _handleSuggest();
                                           },
                                           onSubmitScore:
                                               (double _) =>
@@ -475,7 +458,7 @@ class _BOScreenState extends State<BOScreen> {
                               ),
                             ),
 
-                            // 🔹 Score History Chart + 영상
+                            // 원본 multi-result-chart
                             Expanded(
                               flex: 3,
                               child: Padding(
@@ -490,12 +473,37 @@ class _BOScreenState extends State<BOScreen> {
                               ),
                             ),
 
+                            // 테스트용 line 자동화용
+                            // Expanded(
+                            //   flex: 3,
+                            //   child: Padding(
+                            //     padding: const EdgeInsets.all(12.0),
+                            //     child:
+                            //         _history.isEmpty
+                            //             ? const Center(child: Text('no data'))
+                            //             : MultiResultChart(
+                            //               history: _history,
+                            //               objectives: const [
+                            //                 {'name': 'area error'},
+                            //               ],
+                            //               parameters: const [
+                            //                 {'name': 'Standoff Distance'},
+                            //                 {'name': 'Line Speed'},
+                            //                 {'name': 'Extrusion Pressure'},
+                            //               ],
+                            //               maxIterations: 40,
+                            //             ),
+                            //   ),
+                            // ),
+
                             // 🔹 Acquisition Function Heatmap
                             Expanded(
                               flex: 3,
                               child: Padding(
                                 padding: const EdgeInsets.all(12.0),
-                                child: EquipmentStatus(),
+                                child: CalculateScoreWidget(
+                                  imgController: keyenceImageController,
+                                ), //여개 나중에 프로파일 이미지 넣기
                               ),
                             ),
                           ],

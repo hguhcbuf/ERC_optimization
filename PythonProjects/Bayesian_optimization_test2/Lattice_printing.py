@@ -11,93 +11,91 @@ from NordsonEFD import NordsonEFD
 
 def set_lattice_path_points(
     *,
-    # ─────── 핵심 디자인 변수 ───────
     origin_z: float,
     first_layer_standoff: float,
     inter_layer_standoff: float,
     n_ligaments: int,
     line_velocity: float,
     num_layers: int,
-    # ─────── 공정·기계 파라미터 ───────
-    size_xy: float = 10.0,                    # 한 변 길이
-    safe_margin: float = 1.0,                 # 가장자리 여유 (mm)
+    # ─────── 공정 파라미터 ───────
+    size_xy: float = 10.0,            # 라티스 한 변 길이
+    safe_margin: float = 1.0,
     line_start_xy: Tuple[float, float] = (20.0, 318.0),
     travel_v_xy: Tuple[float, float] = (60.0, 120.0),
     z_travel_v: float = 40.0,
     keyence_mode_default: int = 0,
-    # ─────── 프로파일러 설정 ───────
+    extra_nozzle_travel: float = 3.0,  # 압출 OFF 후 추가 이동(mm)
+    # ─────── 프로파일러 ───────
     profiler_xy: Tuple[float, float] = (17.3, 14.8),
     profiler_z: float = 80.0,
 ) -> List[Tuple[float, float, float, float, float, float, int, int]]:
     """
-    8 mm 폭(좌·우 safe_margin 1 mm)을 유지하며 라티스 path_points를 생성.
-    반환 = [(x, y, z, vx, vy, vz, ExtMode, KeyenceMode), ...]
+    • 각 ligament 길이 = size_xy – 1 mm (기본 9 mm).
+    • 인필 끝점에서 압출 OFF 후 same-dir 으로 extra_nozzle_travel(mm) 이동
+      → 그 지점에서 Z-clearance 상승.
+    • 반환: [(x, y, z, vx, vy, vz, ExtMode, KeyenceMode), …]
     """
 
-    # ── sanity check ──────────────────────────────────
-    if n_ligaments < 1:
-        raise ValueError("n_ligaments는 1 이상이어야 합니다.")
-    if num_layers < 1:
-        raise ValueError("num_layers는 1 이상이어야 합니다.")
+    # ── 기본 체크 ───────────────────────────────
+    if n_ligaments < 1 or num_layers < 1:
+        raise ValueError("n_ligaments 와 num_layers 는 1 이상이어야 합니다.")
     if safe_margin * 2 >= size_xy:
-        raise ValueError("safe_margin이 너무 큽니다 (size_xy보다 작아야 함).")
+        raise ValueError("safe_margin 이 size_xy 보다 크거나 같습니다.")
 
-    # ── 고정 파라미터 ─────────────────────────────────
     clearance_z = origin_z + 5.0
     start_x, start_y = line_start_xy
     pvx, pvy = travel_v_xy
 
-    # ── 8 mm 폭 안쪽에 선분 배치 ──────────────────────
-    inner_span = size_xy - 2 * safe_margin  # == 8 mm
+    inner_span   = size_xy - 2 * safe_margin          # == 8 mm
+    ligament_len = size_xy - 1.0                      # 10 → 9 mm
+
     if n_ligaments == 1:
-        offsets = [safe_margin + inner_span / 2.0]          # 중앙
+        offsets = [safe_margin + inner_span / 2.0]
     else:
         pitch = inner_span / (n_ligaments - 1)
         offsets = [safe_margin + i * pitch for i in range(n_ligaments)]
 
-    # ── path 빌드 ─────────────────────────────────────
     path: List[Tuple[float, float, float, float, float, float, int, int]] = []
 
     for layer in range(num_layers):
         printing_z = origin_z + first_layer_standoff + layer * inter_layer_standoff
         even_layer = (layer % 2 == 0)
 
-        if even_layer:  # ── Y(+) 방향 선분 ──
+        if even_layer:  # Y(+) 방향 인필
             for x_off in offsets:
                 x0 = start_x + x_off
                 y0 = start_y
-                y1 = start_y + size_xy
+                y_end   = start_y + ligament_len         # ← 9 mm
+                y_extra = y_end   + extra_nozzle_travel
 
-                # ① 시작점 이동 (Z = clearance)
                 path.append((x0, y0, clearance_z, pvx, pvy, z_travel_v, 0, keyence_mode_default))
-                # ② Z ↓ & 압출 시작
                 path.append((x0, y0, printing_z, 30.0, 10.0, z_travel_v, 2, keyence_mode_default))
-                # ③ 프린팅(Y+)
-                path.append((x0, y1, printing_z, 0.0, line_velocity, 0.0, 1, keyence_mode_default))
-                # ④ Z ↑ clearance
-                path.append((x0, y1, clearance_z, 30.0, pvy, z_travel_v, 0, keyence_mode_default))
+                path.append((x0, y_end, printing_z, 0.0, line_velocity, 0.0, 1, keyence_mode_default))
+                path.append((x0, y_extra, printing_z, 0.0, pvy, 0.0, 0, keyence_mode_default))
+                path.append((x0, y_extra, clearance_z, 30.0, pvy, z_travel_v, 0, keyence_mode_default))
 
-        else:          # ── X(+) 방향 선분 ──
+        else:          # X(+) 방향 인필
             for y_off in offsets:
                 y0 = start_y + y_off
                 x0 = start_x
-                x1 = start_x + size_xy
+                x_end   = start_x + ligament_len
+                x_extra = x_end   + extra_nozzle_travel
 
-                # ① 시작점 이동
                 path.append((x0, y0, clearance_z, pvx, pvy, z_travel_v, 0, keyence_mode_default))
-                # ② Z ↓ & 압출 시작
                 path.append((x0, y0, printing_z, 10.0, 30.0, z_travel_v, 2, keyence_mode_default))
-                # ③ 프린팅(X+)
-                path.append((x1, y0, printing_z, line_velocity, 0.0, 0.0, 1, keyence_mode_default))
-                # ④ Z ↑ clearance
-                path.append((x1, y0, clearance_z, pvx, 30.0, z_travel_v, 0, keyence_mode_default))
+                path.append((x_end, y0, printing_z, line_velocity, 0.0, 0.0, 1, keyence_mode_default))
+                path.append((x_extra, y0, printing_z, pvx, 0.0, 0.0, 0, keyence_mode_default))
+                path.append((x_extra, y0, clearance_z, pvx, 30.0, z_travel_v, 0, keyence_mode_default))
 
-    # ── 라티스 완료 후 프로파일러 촬영 & 복귀 ───────────
+    # ── 프로파일러 & 복귀 ─────────────────────────
     prof_x, prof_y = profiler_xy
     path.append((prof_x, prof_y, profiler_z, pvx, pvy, z_travel_v, 0, 2))
     path.append((start_x, start_y, profiler_z, pvx, pvy, z_travel_v, 0, 0))
 
     return path
+
+
+
 
 
 
@@ -138,6 +136,12 @@ def print_lattice_by_iter(iter_num: int, origin_z, first_layer_standoff, inter_l
     run_path(shifted_path)
 
 
+# path_points_1 = [
+#         ( 100,  390,  15, 30.0, 30.0, 20.0,  0, 0),
+# ]
+# run_path(path_points_1)
+
+
 # origin_z               = 15.0
 # first_layer_standoff   = 0.2
 # inter_layer_standoff   = 0.2
@@ -145,4 +149,4 @@ def print_lattice_by_iter(iter_num: int, origin_z, first_layer_standoff, inter_l
 # line_velocity          = 12.0
 # num_layers             = 4
 
-# print_lattice_by_iter(15, origin_z, first_layer_standoff, inter_layer_standoff, n_ligaments, line_velocity, num_layers)
+# print_lattice_by_iter(2, origin_z, first_layer_standoff, inter_layer_standoff, n_ligaments, line_velocity, num_layers)

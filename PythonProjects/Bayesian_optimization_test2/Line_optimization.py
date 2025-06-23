@@ -1,6 +1,6 @@
 from Line_printing import print_line_by_iter
 from NordsonEFD    import NordsonEFD
-from Calculate_score import calculate_last_line_stddev
+from Calculate_score import calculate_area_error
 from bayes_opt      import BayesianOptimization
 
 import time, os
@@ -10,7 +10,7 @@ file_path = r"C:\FTP\Keyence\lj-s\result\SD2_001\250617_034122.txt"
 log_dir   = r"C:\Users\Administrator\Documents\JH\optimization_logs"
 os.makedirs(log_dir, exist_ok=True)
 
-inst = NordsonEFD(port="COM4", baudrate=115200, timeout=1)
+inst = NordsonEFD(port="COM5", baudrate=115200, timeout=1)
 origin_z = 15
 count    = 1          # 전역 카운터
 
@@ -23,15 +23,19 @@ def black_box_function(standoff_distance, line_velocity, pressure):
     inst.SetPressure(pressure)
     print_line_by_iter(count, origin_z, standoff_distance, line_velocity)
 
-    score, _ = calculate_last_line_stddev(file_path)
+    # 단면적을 0.1mm^2 을 향해 최적화한다
+    score = calculate_area_error(file_path, 0.1)
+
+    # 여기서 standoff distance, line velocity, pressure, score 값을 flutter로 보내주고싶어
+
     count += 1
     return -score
 
 # 탐색 공간
 pbounds = {
-    "standoff_distance": (0.15, 1),
-    "line_velocity"    : (1, 50),
-    "pressure"         : (30, 200)
+    "standoff_distance": (0.1, 0.5),
+    "line_velocity"    : (2, 40),
+    "pressure"         : (250, 450)
 }
 
 optimizer = BayesianOptimization(f=black_box_function,

@@ -28,9 +28,9 @@ FILE_PATH = r"C:\FTP\Keyence\lj-s\result\SD2_001\250617_034122.txt"
 LOG_DIR   = r"C:\Users\Administrator\Documents\JH\optimization_logs"
 os.makedirs(LOG_DIR, exist_ok=True)
 
-inst                     = NordsonEFD(port="COM4", baudrate=115200, timeout=1)
+inst                     = NordsonEFD(port="COM5", baudrate=115200, timeout=1)
 ORIGIN_Z                 = 15.0        # 베드 기준 원점 Z
-FIRST_LAYER_STANDOFF     = 0.17        # 고정값
+FIRST_LAYER_STANDOFF     = 0.2        # 고정값
 
 # ─── torch 기본 설정 ───────────────────────────────────────────────────
 tkwargs = dict(
@@ -42,8 +42,8 @@ tkwargs = dict(
 #   [inter_layer_standoff, n_ligaments, line_velocity, num_layers, pressure]
 bounds_raw = torch.tensor(
     [
-        [0.05, 1.0,  2.0, 1.0,  100.0],   # lower
-        [0.2, 13.0, 40.0, 8.0, 300.0],   # upper
+        [0.05, 1.0,  5.0, 1.0,  150.0],   # lower
+        [0.3, 8.0, 30.0, 8.0, 300.0],   # upper
     ],
     **tkwargs,
 )

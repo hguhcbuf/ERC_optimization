@@ -38,6 +38,51 @@ def calculate_last_line_stddev(file_path):
 
     return round(stddev, 3), round(average, 3)
 
+
+# target area 에서 벗어난 오차를 return 하는 평가함수 (250619 선 최적화를 위해 수정된 평가함수)
+
+def calculate_area_error(file_path: str, target_area: float = 0.1) -> float:
+    """
+    파일의 **마지막 줄** 숫자 값들이 `target_area`와 얼마나
+    차이나는지(절대 오차)의 평균을 계산해 반환한다.
+
+    반환값: mean_abs_error (소수점 3자리, float)
+
+    예) 값이 [98, 101, 99] 이면  
+        |98-100| + |101-100| + |99-100| = 1 + 1 + 1 = 3 → 3/3 = 1.0
+    """
+    with open(file_path, "r", encoding="utf-8") as f:
+        lines = [ln.strip() for ln in f if ln.strip()]
+
+    if not lines:
+        raise ValueError("파일에 데이터가 없습니다.")
+
+    # 마지막 줄 → 쉼표로 분리
+    last_values = []
+    for tok in lines[-1].split(","):
+        tok = tok.strip()
+        if not tok:
+            continue
+        if tok[0] in "+-":
+            sign = -1.0 if tok[0] == "-" else 1.0
+            tok = tok[1:]
+        else:
+            sign = 1.0
+        try:
+            val = sign * float(tok)
+            last_values.append(val)
+        except ValueError:
+            continue
+
+    if not last_values:
+        raise ValueError("마지막 줄에 숫자 데이터가 없습니다.")
+
+    # 절대 오차 평균
+    mean_err = float(np.mean([abs(v - target_area) for v in last_values]))
+    return round(mean_err, 3)
+
+
+
 # ──────────────────────────────────────────────────────────────
 def wait_for_update_then_calc(file_path: str,
                               poll_sec: float = 1.0,
@@ -156,14 +201,14 @@ def calculate_lattice_scores(file_path: str):
                 continue
         return total
 
-    sum_third  = sum_line(line_third_last)
-    sum_second = sum_line(line_second_last)
-    sum_last   = sum_line(line_last)
+    sum_CSA  = sum_line(line_third_last)
+    sum_PL = sum_line(line_second_last)
+    height   = sum_line(line_last)
 
-    if sum_third == 0:
+    if sum_CSA == 0:
         raise ZeroDivisionError("마지막-3번째 줄 합이 0이어서 score_1을 계산할 수 없습니다.")
 
-    score_1 = sum_second / sum_third
-    score_2 = sum_last
+    score_1 = sum_PL / sum_CSA
+    score_2 = height
 
-    return round(score_1, 3), round(score_2, 3)
+    return round(sum_CSA, 3), round(sum_PL, 3), round(height, 3)

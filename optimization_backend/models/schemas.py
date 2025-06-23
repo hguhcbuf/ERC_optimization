@@ -1,6 +1,8 @@
 from pydantic import BaseModel
 from typing import List, Literal
 
+
+
 class Objective(BaseModel):
     name: str
     method: Literal["manual", "bus 1", "bus 2"]
@@ -25,3 +27,8 @@ class BatchResult(BaseModel):
 
 class PressureRequest(BaseModel):
     pressure: float
+
+
+
+
+
