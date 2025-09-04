@@ -63,3 +63,5 @@ def get_next_suggestion(config, history_data):
         raw_samples=20,
     )
     return candidate.detach().tolist()[0]
+
+

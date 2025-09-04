@@ -57,7 +57,7 @@ import threading, asyncio, json, os
 
 # … inst, print_line_by_iter, calculate_area_error 등은 그대로 …
 
-file_path = r"C:\FTP\Keyence\lj-s\result\SD1_004\250623_070250.txt"
+file_path = r"C:\FTP\Keyence\lj-s\result\SD1_004\250624_140934.txt"
 log_dir   = r"C:\Users\Administrator\Documents\JH\optimization_logs"
 os.makedirs(log_dir, exist_ok=True)
 

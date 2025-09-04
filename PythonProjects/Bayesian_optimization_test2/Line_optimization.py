@@ -6,7 +6,7 @@ from bayes_opt      import BayesianOptimization
 import time, os
 
 # ────────────────────────────────────────────────
-file_path = r"C:\FTP\Keyence\lj-s\result\SD2_001\250617_034122.txt"
+file_path = r"C:\FTP\Keyence\lj-s\result\SD1_004\250624_140934.txt"
 log_dir   = r"C:\Users\Administrator\Documents\JH\optimization_logs"
 os.makedirs(log_dir, exist_ok=True)
 
@@ -33,9 +33,9 @@ def black_box_function(standoff_distance, line_velocity, pressure):
 
 # 탐색 공간
 pbounds = {
-    "standoff_distance": (0.1, 0.5),
-    "line_velocity"    : (2, 40),
-    "pressure"         : (250, 450)
+    "standoff_distance": (0.1, 0.3),
+    "line_velocity"    : (5, 30),
+    "pressure"         : (80, 200)
 }
 
 optimizer = BayesianOptimization(f=black_box_function,

@@ -9,4 +9,5 @@ pyserial
 pyads
 bayesian-optimization
 pandas
-numpy==1.23.5
+numpy
+matplotlib
