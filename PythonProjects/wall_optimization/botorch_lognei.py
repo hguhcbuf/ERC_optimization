@@ -18,7 +18,7 @@ from botorch.acquisition.logei import qLogNoisyExpectedImprovement
 from botorch.sampling.normal import SobolQMCNormalSampler
 from botorch.optim import optimize_acqf
 
-from Calculate_score import calculate_score_3sigma
+from Calculate_score import calculate_score_3sigma, calculate_score_std
 from print_and_scan import print_and_scan
 from NordsonEFD    import NordsonEFD
 
@@ -26,23 +26,31 @@ from NordsonEFD    import NordsonEFD
 # User Config (EDIT HERE)
 # =========================
 SEED = 123
-MAX_ITERS = 20
-N_RANDOM = 5
-N_UCB = 5
+MAX_ITERS = 30
+N_RANDOM = 6
+N_UCB = 12
 UCB_BETA = 0.25
-OBJECTIVE_SENSE = "min"
+OBJECTIVE_SENSE = "max"
 LOG_CSV = r"PythonProjects\wall_optimization\bo_log.csv"
 LOG_PROFILE = r"C:\FTP\Keyence\lj-s\result\SD1_006\250829_104449.txt"
 total_height = 0.7
 inst = NordsonEFD(port="COM5", baudrate=115200, timeout=1)
 
-# 파라미터 범위
+# 파라미터 범위 27 gage
 PBONDS: Dict[str, Tuple[float, float]] = {
-    "pressure"     : (150.0, 300.0),
-    "velocity"     : (15.0, 30.0),
-    "wall_spacing" : (0.36, 0.6),
-    "number_of_layers": (2.5, 6.5),
+    "pressure"     : (120.0, 180.0),
+    "velocity"     : (10.0, 30.0),
+    "wall_spacing" : (0.25, 0.6),
+    "number_of_layers": (3.5, 8.5),
 }
+
+ # 25 gage
+# PBONDS: Dict[str, Tuple[float, float]] = {
+#     "pressure"     : (180.0, 230.0),
+#     "velocity"     : (10.0, 30.0),
+#     "wall_spacing" : (0.35, 0.6),
+#     "number_of_layers": (2.5, 8.5),
+# }
 
 # =========================
 # Helpers
@@ -71,28 +79,30 @@ def _json_dumps_safe(obj) -> str:
             return ""
 
 def ensure_csv(path: str):
-    """Create CSV with header if missing (프로파일 컬럼 추가)."""
+    """Create CSV with header if missing (통계값 컬럼 추가)."""
     if not Path(path).exists():
         with open(path, "w", newline="", encoding="utf-8") as f:
             w = csv.writer(f)
             header = ["iter", "timestamp"] + PARAMS + [
                 "objective_raw", "objective_for_BO", "acquisition",
-                "profile_perpendicular", "profile_parallel",
+                "norm_avg", "norm_std", "avg_val", "std_val",
             ]
             w.writerow(header)
 
+
 def log_row(path: str, iteration: int, x: Tensor, y_raw: float, y_bo: float,
-            acq_name: str, profile_perpendicular, profile_parallel):
-    """Append one row to CSV (프로파일은 JSON 문자열로 저장)."""
+            acq_name: str, norm_avg: float, norm_std: float,
+            avg_val: float, std_val: float):
+    """Append one row to CSV (norm/avg/std 기록)."""
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     x_list = [float(v) for v in x.view(-1).tolist()]
     row = [iteration, ts] + x_list + [
         float(y_raw), float(y_bo), acq_name,
-        _json_dumps_safe(profile_perpendicular),
-        _json_dumps_safe(profile_parallel),
+        float(norm_avg), float(norm_std), float(avg_val), float(std_val),
     ]
     with open(path, "a", newline="", encoding="utf-8") as f:
         csv.writer(f).writerow(row)
+
 
 def sample_random(n: int = 1) -> Tensor:
     u = torch.rand(n, D, **tkwargs)
@@ -203,21 +213,26 @@ def main():
             )
         except Exception as e:
             print(f"⚠️ print_and_scan 실패(건너뜀): {e}")
+            inst.SetPressure(0)
 
-        time.sleep(7)
+        time.sleep(15)
 
-        y_raw, profile_perpendicular, profile_parallel = calculate_score_3sigma(LOG_PROFILE)
+        #y_raw, profile_perpendicular, profile_parallel = calculate_score_3sigma(LOG_PROFILE)
+        # 점수 계산
+        y_raw, norm_avg, norm_std, avg_val, std_val = calculate_score_std(LOG_PROFILE)
         y_bo = y_for_bo(y_raw)
 
         # Update data
         X_all = torch.cat([X_all, x_next.view(1, -1)], dim=0)
         Y_all = torch.cat([Y_all, torch.tensor([[y_bo]], **tkwargs)], dim=0)
 
-        # Log to CSV (프로파일 포함)
+        # Log to CSV
         log_row(LOG_CSV, it, x_next, y_raw, y_bo, acq_name,
-                profile_perpendicular, profile_parallel)
+                norm_avg, norm_std, avg_val, std_val)
 
-        print(f"📎 Logged iter {it} ({acq_name}) → raw={y_raw:.6g}  for_BO={y_bo:.6g}")
+        print(f"📎 Logged iter {it} ({acq_name}) → raw={y_raw:.6g} for_BO={y_bo:.6g}, "
+            f"norm_avg={norm_avg:.3f}, norm_std={norm_std:.3f}, avg={avg_val:.3f}, std={std_val:.3f}")
+
 
     print("\n🎉 BO finished.")
     print(f"Log saved to: {Path(LOG_CSV).resolve()}")

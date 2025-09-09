@@ -43,6 +43,7 @@ ALL_VARS: List[PLC_Var] = [Set_Pos_X, Set_Pos_Y, Set_Pos_Z,
                           Set_Go, Get_IDLE, Set_KeyenceMode, Force_Capture, Set_ExtMode]
 
 # inst = NordsonEFD(port='COM4', baudrate=115200, timeout=1)
+# inst = NordsonEFD(port="COM5", baudrate=115200, timeout=1)
 # ──────────────────────────────────────────────────────────────
 
 
@@ -141,4 +142,6 @@ def run_path(path_points: Iterable[Sequence]) -> bool:
     except Exception as e:
         # 필요시 로깅이나 재시도 로직 추가
         print(f"[PLC 연결 오류] {e}")
+        # inst.SetPressure(0)
+        # print("pressure set to 0")
         return False

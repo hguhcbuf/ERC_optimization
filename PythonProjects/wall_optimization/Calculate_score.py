@@ -83,3 +83,57 @@ def calculate_score_3sigma(file_path):
     avg_second_last = np.mean(filtered_second_last)
     score = avg_second_last - avg_last
     return score, avg_last, avg_second_last
+
+
+
+def calculate_score_std(file_path):
+    with open(file_path, 'r', encoding='utf-8') as f:
+        lines = f.readlines()
+
+    # 마지막 두 번째 줄 가져오기
+    second_last_line = lines[-2].strip()
+
+    def parse_line(line):
+        parts = line.split(',')
+        values = []
+        for val in parts:
+            val = val.strip()
+            if val.startswith('+'):
+                val = val[1:]
+            try:
+                values.append(float(val))
+            except ValueError:
+                continue
+        return np.array(values, dtype=float)
+
+    values = parse_line(second_last_line)
+    if values.size == 0:
+        raise ValueError("값이 없습니다.")
+
+    # 평균과 표준편차 계산
+    avg_val = float(np.mean(values))
+    std_val = float(np.std(values, ddof=0))  # 표준편차 (단위: mm)
+
+    # ---- 범위 보정 ----
+    # avg 범위: 16 ~ 70
+    if avg_val < 16:
+        avg_val = 16.0
+    elif avg_val > 70:
+        avg_val = 70.0
+
+    # std 범위: 0 ~ 5
+    if std_val < 0:
+        std_val = 0.0
+    elif std_val > 3:
+        std_val = 3.0
+
+    # ---- Min-Max Normalization ----
+    norm_avg = (avg_val - 16) / (70 - 16)   # [0,1]
+    norm_std = (std_val - 0) / (3 - 0)      # [0,1]
+
+    # ---- Score ----
+    score = norm_avg - norm_std
+
+    return score, norm_avg, norm_std, avg_val, std_val
+
+
