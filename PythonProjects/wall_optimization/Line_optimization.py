@@ -40,7 +40,7 @@ def black_box_function(number_of_layers, line_velocity, pressure, spacing):
 pbounds = {
     "number_of_layers": (2.5, 6.5),
     "line_velocity"    : (15, 30),
-    "pressure"         : (150,300), 
+    "pressure"         : (450,500), 
     "spacing" : (0.36, 0.6),
 }
 

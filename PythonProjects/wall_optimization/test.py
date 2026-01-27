@@ -8,79 +8,38 @@ from print_snake import generate_snake_fill
 from Calculate_score import calculate_score
 from print_and_scan import print_and_scan
 import numpy as np
+from Calculate_score import calculate_score
+import time
 
-import numpy as np
 
-import numpy as np
+# path_points_1 = [
+#         ( 20,  480,  20, 80.0, 80.0, 30.0,  0, 0),
+#         ( 20,  480,  13.05, 10.0, 80.0, 30.0,  2, 0),
+#         ( 40,  480,  13.05, 10.0, 80.0, 30.0,  1, 0),
+#         ( 40,  480,  20, 80.0, 80.0, 30.0,  0, 0),
+# ]
+# run_path(path_points_1)
 
-import numpy as np
+# path_keyence = [( 18.8,  19.8,  30, 50.0, 50.0, 30.0,  0, 2)]
+# run_path(path_keyence)
 
-def calculate_score_std(line, file_path=r"C:\FTP\Keyence\lj-s\result\SD1_006\250829_104449.txt"):
-    with open(file_path, 'r', encoding='utf-8') as f:
-        lines = f.readlines()
-
-    # 마지막 두 번째 줄 가져오기
-    second_last_line = lines[line].strip()
-
-    def parse_line(line):
-        parts = line.split(',')
-        values = []
-        for val in parts:
-            val = val.strip()
-            if val.startswith('+'):
-                val = val[1:]
-            try:
-                values.append(float(val))
-            except ValueError:
-                continue
-        return np.array(values, dtype=float)
-
-    values = parse_line(second_last_line)
-    if values.size == 0:
-        raise ValueError("값이 없습니다.")
-
-    # 평균과 표준편차 계산
-    avg_val = float(np.mean(values))
-    std_val = float(np.std(values, ddof=0))  # 표준편차 (단위: mm)
-
-    # ---- 범위 보정 ----
-    # avg 범위: 16 ~ 70
-    if avg_val < 16:
-        avg_val = 16.0
-    elif avg_val > 70:
-        avg_val = 70.0
-
-    # std 범위: 0 ~ 5
-    if std_val < 0:
-        std_val = 0.0
-    elif std_val > 3:
-        std_val = 3.0
-
-    # ---- Min-Max Normalization ----
-    norm_avg = (avg_val - 16) / (70 - 16)   # [0,1]
-    norm_std = (std_val - 0) / (3 - 0)      # [0,1]
-
-    # ---- Score ----
-    score = norm_avg - norm_std
-
-    return norm_avg, norm_std
+inst                     = NordsonEFD(port="COM5", baudrate=115200, timeout=1)
+print(inst.SetPressure(10))
+print(inst.ReadPressure())
+print_and_scan(iter_num=1, spacing=0.6, origin_z=13, layer_step=0.1, n_layers=1, move_x = 22, move_y = 318, speed = 40)
 
 
 
-# 테스트 루프 (끝에서부터 2칸씩 올라가며)
-c = -2
-for i in range(50):
-    a, b = calculate_score_std(line=c)
-    print(f"line {c:4d} -> avg = {a:.6f}, fwhm = {b:.6f}")
-    c += -2
+time.sleep(7)
 
+LOG_PROFILE = r"C:\FTP\Keyence\lj-s\result\SD1_007\251015_193846.txt"
 
+y_raw, norm_surface_area, norm_std, surface_area, std_val, trigger_harsh_extrude = calculate_score(LOG_PROFILE)
 
+print(f" Logged iter  () → Score={y_raw}, "
+            f"normalized surface area={norm_surface_area:.3f}, normalized profile std={norm_std:.3f}, raw surface area={surface_area:.3f}, raw profile std={std_val:.3f}")
+             
 
-# inst                     = NordsonEFD(port="COM5", baudrate=115200, timeout=1)
-# print(inst.SetPressure(313.3))
-# print(inst.ReadPressure())
-# print_and_scan(iter_num=1, spacing=0.52, origin_z=15, layer_step=0.1, n_layers=6, move_x = 20, move_y = 320, speed = 24)
 
 # file_path = r"C:\FTP\Keyence\lj-s\result\SD1_006\250819_124738.txt"
 # a = calculate_score(file_path)
@@ -175,3 +134,6 @@ for i in range(50):
 # FILE_PATH = r"C:\FTP\Keyence\lj-s\result\SD2_001\250617_034122.txt"
 # score1, score2, score3 = calculate_lattice_scores(FILE_PATH)
 # print(f"surface area={score1:.4f}  volume = {score2:.4f}  score height = {score3:.4f}")
+
+# Old Keyence point 
+#   path_keyence = ( 24.8,  22.8,  30, 50.0, 50.0, 30.0,  0, 2)

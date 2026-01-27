@@ -64,39 +64,55 @@ def generate_snake_fill(
 
 
 def generate_snake_fill_rotated(
-    width: float = 30.0,         # 기판 폭 (mm)
-    height: float = 30.0,        # 기판 높이 (mm)
-    spacing: float = 1.0,        # 선 간격 (mm)
-    z: float = 0.16,             # 첫 레이어 오프셋 (origin_z에 더해짐)
-    layer_step: float | None = None,  # 레이어 간 상승량
-    speed: float = 20.0,         # 프린트/이동 속도 (mm/s)
-    origin_z: float = 13.0,      # 시작 Z 오프셋
-    n_layers: int = 4            # 총 레이어 수
+    width: float = 30.0,
+    height: float = 30.0,
+    spacing: float = 1.0,
+    z: float = 0.16,
+    layer_step: float | None = None,
+    speed: float = 20.0,
+    origin_z: float = 13.0,
+    n_layers: int = 4
 ) -> List[PathPoint]:
     """
     스네이크 패턴을 시계 방향으로 90도 회전시켜 출력.
-    - 1,3,5,... 레이어: 정방향
-    - 2,4,6,... 레이어: 역방향
+    spacing 고정, width를 넘어가는 마지막 라인까지 출력 후 종료.
+    - y방향 프린팅: speed
+    - x방향 프린팅: speed × 3
     """
     if layer_step is None:
         layer_step = z
 
     def snake_template() -> List[PathPoint]:
-        """Z=0에서 회전된 스네이크 패턴 생성."""
-        pts: List[PathPoint] = []
-        num_lines = int(math.floor(width / spacing)) + 1
-        x_values = [min(i * spacing, width) for i in range(num_lines)]
+        """Z=0에서 회전된 스네이크 패턴 생성 (width 넘어간 지점까지 포함)."""
+        if spacing <= 0:
+            raise ValueError("spacing must be > 0")
 
-        for i, x in enumerate(x_values):
+        pts: List[PathPoint] = []
+        x = 0.0
+        i = 0
+        while True:
+            # y 방향 구간 (프린팅 구간, speed 그대로)
             if i % 2 == 0:
                 y_start, y_end = 0.0, height
             else:
                 y_start, y_end = height, 0.0
 
-            pts.append((x, y_start, 0.0, speed, speed, 20.0, 3, 0))
-            pts.append((x, y_start, 0.0, speed, speed, 20.0, 3, 0))
-            pts.append((x, y_end,   0.0, speed, speed, 20.0, 3, 0))
-            pts.append((x, y_end,   0.0, speed, speed, 20.0, 3, 0))
+            # --- y방향 프린팅 ---
+            
+            pts.append((x, y_start, 0.0, speed * 3, speed, 20.0, 3, 0))
+            pts.append((x, y_end,   0.0, speed * 3, speed, 20.0, 3, 0))
+            
+
+            # --- x방향 이동 (다음 라인으로 이동, speed×3, 프린팅 유지) ---
+            i += 1
+            x_next = i * spacing
+            if x_next > width:
+                # width를 초과하면 그 라인까지만 출력 후 종료
+                break
+            # x방향 프린팅 구간 속도 3배
+            pts.append((x_next, y_end, 0.0, speed * 3, speed, 20.0, 3, 0))
+            x = x_next
+
         return pts
 
     base_tmpl = snake_template()
@@ -108,5 +124,12 @@ def generate_snake_fill_rotated(
         for x, y, _z0, vx, vy, vz, ext, key in seq:
             paths.append((x, y, z_k, vx, vy, vz, ext, key))
 
+    # --- 첫 path와 마지막 path ext 값 수정 ---
+    if paths:
+        paths[0]  = (*paths[0][:6], 2, paths[0][7])   # 첫 path ext = 2
+        paths[-1] = (*paths[-1][:6], 1, paths[-1][7]) # 마지막 path ext = 1
+
     return paths
+
+
 

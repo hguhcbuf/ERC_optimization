@@ -18,30 +18,35 @@ from botorch.acquisition.logei import qLogNoisyExpectedImprovement
 from botorch.sampling.normal import SobolQMCNormalSampler
 from botorch.optim import optimize_acqf
 
-from Calculate_score import calculate_score_3sigma, calculate_score_std
+from Calculate_score import calculate_score
 from print_and_scan import print_and_scan
 from NordsonEFD    import NordsonEFD
+from PLC_motion_controller import run_path
+
+
 
 # =========================
-# User Config (EDIT HERE)
+# User Config
 # =========================
 SEED = 123
-MAX_ITERS = 30
-N_RANDOM = 6
-N_UCB = 12
-UCB_BETA = 0.25
+MAX_ITERS = 64
+N_RANDOM = 8
+N_UCB = 8
+UCB_BETA = 3
 OBJECTIVE_SENSE = "max"
 LOG_CSV = r"PythonProjects\wall_optimization\bo_log.csv"
-LOG_PROFILE = r"C:\FTP\Keyence\lj-s\result\SD1_006\250829_104449.txt"
-total_height = 0.7
+LOG_PROFILE = r"C:\FTP\Keyence\lj-s\result\SD1_007\251023_193910.txt"
+total_height = 0.8
 inst = NordsonEFD(port="COM5", baudrate=115200, timeout=1)
+
+
 
 # 파라미터 범위 27 gage
 PBONDS: Dict[str, Tuple[float, float]] = {
-    "pressure"     : (120.0, 180.0),
-    "velocity"     : (10.0, 30.0),
-    "wall_spacing" : (0.25, 0.6),
-    "number_of_layers": (3.5, 8.5),
+    "pressure"     : (400.0, 450.0),
+    "velocity"     : (20.0, 40.0),
+    "wall_spacing" : (0.20, 0.8),
+    "number_of_layers": (5.6, 10.4),
 }
 
  # 25 gage
@@ -157,6 +162,8 @@ def tensorize_logs(path: str) -> Tuple[Optional[Tensor], Optional[Tensor]]:
 
 def main():
     ensure_csv(LOG_CSV)
+    harsh_extrude_x = 20
+    harsh_extrude_y = 480
 
     # Warm-start
     X_all, Y_all = tensorize_logs(LOG_CSV)
@@ -166,7 +173,7 @@ def main():
         iter_start = 1
     else:
         iter_start = int(X_all.shape[0]) + 1
-        print(f"✅ Resuming from {LOG_CSV}: {iter_start-1} rows loaded.")
+        print(f"Resuming from {LOG_CSV}: {iter_start-1} rows loaded.")
 
     # BO Loop
     for it in range(iter_start, MAX_ITERS + 1):
@@ -181,7 +188,7 @@ def main():
                 try:
                     model = fit_model(X_all, Y_all)
                 except Exception as e:
-                    print(f"⚠️ GP fit failed ({e}). Fallback to RANDOM.")
+                    print(f"GP fit failed ({e}). Fallback to RANDOM.")
                     x_next = sample_random(1).squeeze(0)
                     acq_name = "RANDOM"
                 else:
@@ -194,11 +201,12 @@ def main():
 
         # ===== Evaluate (print & scan) =====
         param_values = {name: float(val) for name, val in zip(PARAMS, x_next.tolist())}
-        pressure         = round(param_values["pressure"], 3)
+        #fix this later 0919*************************************************************************
+        pressure         = round(param_values["pressure"], 3) 
         velocity         = round(param_values["velocity"], 3)
         wall_spacing     = round(param_values["wall_spacing"], 3)
         number_of_layers = max(1, round(param_values["number_of_layers"]))
-        layer_step = round((total_height - 0.1) / number_of_layers, 3)
+        layer_step = round((total_height - 0.1) / (number_of_layers-1), 3)
 
         try:
             inst.SetPressure(pressure)
@@ -209,17 +217,22 @@ def main():
             print_and_scan(
                 it, spacing=wall_spacing, origin_z=13,
                 layer_step=layer_step, n_layers=number_of_layers,
-                move_x=20, move_y=320, speed=velocity,
+                move_x = 22, move_y = 318, speed=velocity,
             )
         except Exception as e:
             print(f"⚠️ print_and_scan 실패(건너뜀): {e}")
             inst.SetPressure(0)
+            
 
-        time.sleep(15)
+        time.sleep(7)
 
-        #y_raw, profile_perpendicular, profile_parallel = calculate_score_3sigma(LOG_PROFILE)
         # 점수 계산
-        y_raw, norm_avg, norm_std, avg_val, std_val = calculate_score_std(LOG_PROFILE)
+        y_raw, norm_avg, norm_std, avg, std_val, trigger_harsh_extrude = calculate_score(LOG_PROFILE)
+
+        
+        
+            
+
         y_bo = y_for_bo(y_raw)
 
         # Update data
@@ -228,13 +241,35 @@ def main():
 
         # Log to CSV
         log_row(LOG_CSV, it, x_next, y_raw, y_bo, acq_name,
-                norm_avg, norm_std, avg_val, std_val)
+                norm_avg, norm_std, avg, std_val)
 
-        print(f"📎 Logged iter {it} ({acq_name}) → raw={y_raw:.6g} for_BO={y_bo:.6g}, "
-            f"norm_avg={norm_avg:.3f}, norm_std={norm_std:.3f}, avg={avg_val:.3f}, std={std_val:.3f}")
+        print(f" Logged iter {it} ({acq_name}) → Score={y_bo:.6g}, "
+            f"normalized profile avg={norm_avg:.3f}, normalized profile std={norm_std:.3f}, raw profile avg={avg:.3f}, raw profile std={std_val:.3f}")
+        
+        # harsh ext
+        if trigger_harsh_extrude:
+            try:
+                print("harse extrude")
+                inst.SetPressure(600)
+                path_points_1 = [
+                        ( harsh_extrude_x,  harsh_extrude_y,  20, 80.0, 80.0, 30.0,  0, 0),
+                        ( harsh_extrude_x,  harsh_extrude_y,  13.05, 20.0, 80.0, 30.0,  2, 0),
+                        ( harsh_extrude_x+20,  harsh_extrude_y,  13.05, 20.0, 80.0, 30.0,  1, 0),
+                        ( harsh_extrude_x+20,  harsh_extrude_y,  20, 80.0, 80.0, 30.0,  0, 0),
+                ]
+                run_path(path_points_1)
+                if harsh_extrude_x < 150:
+                    harsh_extrude_x+=30
+                else:
+                    harsh_extrude_y+=1
+                    harsh_extrude_x=20
+
+            except Exception as e:
+                print(f"⚠️ print_and_scan 실패(건너뜀): {e}")
+                inst.SetPressure(0)
 
 
-    print("\n🎉 BO finished.")
+    print("\n BO finished.")
     print(f"Log saved to: {Path(LOG_CSV).resolve()}")
 
 try:
