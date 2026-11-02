@@ -102,7 +102,8 @@ class AdsIO:
 
 
 class Q1Test:
-    def __init__(self, io):
+    def __init__(self, io, check_q1=True):
+        self.check_q1 = check_q1
         self.io = io
         self.owned = False
         self.last_state = None
@@ -131,6 +132,8 @@ class Q1Test:
     def fault_check(self):
         if self.r(U+'bESTOP') or self.state() in ERROR_STATES:
             raise RuntimeError('ESTOP/PLC 오류 상태. status의 오류 번호 확인; 자동 Reset 안 함.')
+        if not self.check_q1:
+            return
         if self.r(M+'motQ1.NcToPlc.AxisId') != 4:
             raise RuntimeError('Q1 AxisId가 4가 아닙니다.')
         for fb in ('fb_Q1Power', 'fb_Q1Jog', 'fb_Q1Reset', 'fb_Q1Status'):
@@ -173,7 +176,7 @@ class Q1Test:
                 raise RuntimeError(f'{name}가 0이 아닙니다.')
         if self.r(M+'fb_Q1Jog.Busy') or self.r(M+'fb_Q1Reset.Busy'):
             raise RuntimeError('Q1 Jog/Reset 진행 중입니다.')
-        if not self.r(M+'bQ1Linked'):
+        if self.check_q1 and not self.r(M+'bQ1Linked'):
             raise RuntimeError('motQ1 Link To PLC 확인 필요')
 
     def arm(self):
@@ -221,15 +224,19 @@ class Q1Test:
         print('이 출력은 실제 기구 이동/스케일 정확성을 보증하지 않습니다. Q1 Power는 ON 유지.')
         self.owned = False
 
-    def gcode(self, filename, timeout):
-        self.arm()
+    def gcode(self, filename, timeout, use_q1=True):
+        # Function API and CLI share this exact PLC handshake.
+        self.owned = True
+        if use_q1:
+            self.arm()
         self.w(U+'ContinueGCode', False)
         self.w(U+'Auto_CodeType', 0)       # CodeName이 기존 큐에도 중복 등록되지 않게 함
         self.w(U+'SingleGCodeMode', True)
-        self.w(U+'Q1UseInGCode', True)
+        self.w(U+'Q1UseInGCode', use_q1)
         self.w(U+'OpMode', 2)             # Existing XYZ power/reference path may execute
         self.wait(lambda: self.state() == 200 and not self.r(M+'bBusy')
-                  and self.r(M+'bQ1UseLatched') and self.r(M+'bQ1Ready'),
+                  and bool(self.r(M+'bQ1UseLatched')) == use_q1
+                  and (not use_q1 or self.r(M+'bQ1Ready')),
                   timeout, 'G-code 대기/XYZ 초기화/Q1 준비')
         # Same filename prefix as the supplied PLC_motion_controller_mod.py.
         plc_name = '\\\\' + filename
@@ -247,7 +254,7 @@ class Q1Test:
                   and not self.r(M+'bQ1Reserved'), timeout, '파일 완료 및 그룹 해제')
         self.w(U+'Q1UseInGCode', False)
         print('단일 파일 완료 및 PLC 예약 해제 확인. NC 실제 그룹 해제도 확인하십시오.')
-        print('OpMode=2 대기, Q1 Power ON 유지. 자동 큐 실행 설정은 복원하지 않았습니다.')
+        print('OpMode=2 대기. Q1 Power는 변경하지 않고, 자동 큐 실행 설정은 복원하지 않습니다.')
         self.owned = False
 
     def disable(self):
@@ -350,6 +357,9 @@ def main(argv=None):
             print('취소: 쓰기 명령 없음')
             return 0
         test.preflight(action)  # User may have waited at the prompt.
+        if action == 'gcode':
+            from PLC_motion_controller_mod import validate_gcode_path
+            validate_gcode_path(test, args.file)
         if action == 'jog':
             test.jog(args.velocity, args.seconds, 1 if args.direction == '+' else -1)
         elif action == 'gcode':
@@ -370,3 +380,4 @@ def main(argv=None):
 
 if __name__ == '__main__':
     raise SystemExit(main())
+

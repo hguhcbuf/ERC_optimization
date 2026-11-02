@@ -3,6 +3,7 @@ import pyads
 
 PLC_AMS = '192.168.0.2.1.1'
 PLC_PORT = pyads.PORT_TC3PLC1
+GCODE_BASE_PATH = r'C:\Users\Administrator\Desktop\GCodes'
 
 
 # --- PLC TAGS ---
@@ -27,3 +28,4 @@ class PLC_Var:
             raise RuntimeError(f"{self.name} : bind() 먼저 호출 필요")
         self._symbol.write(value)
     
+

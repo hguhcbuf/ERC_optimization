@@ -90,91 +90,170 @@ ALL_VARS: List[PLC_Var] = [
 # ──────────────────────────────────────────────────────────────
 
 plc = None
+_io = None
+_operation_lock = None
 
-def initiate():
-    global plc
 
+def initiate(ams=PLC_AMS, port=PLC_PORT):
+    """Connect without motion. Legacy True/False return contract is retained."""
+    global plc, _io, _operation_lock
+    import threading
+    from Test_Q1_motion import AdsIO
+    if _io is not None:
+        return True
+    candidate = None
     try:
-        plc = pyads.Connection(PLC_AMS, PLC_PORT)
-        plc.open()
-
-        plc.set_timeout(5000)  # 5초
-
+        candidate = AdsIO(ams, port)
         for v in ALL_VARS:
-            v.bind(plc)
-
-        print("PLC connected & variables bound")
-
+            v.bind(candidate.plc)
+        _io, plc = candidate, candidate.plc
+        _operation_lock = threading.Lock()
         return True
-
-    except Exception as e:
-        print("PLC init failed:", e)
+    except Exception as exc:
+        if candidate is not None:
+            candidate.close()
+        for v in ALL_VARS:
+            v._symbol = None
+        print("PLC init failed:", exc)
         return False
 
 
+def _connected():
+    if _io is None:
+        raise RuntimeError("Call initiate() successfully before using motion functions")
+    return _io
 
 
-def run_gcode_file(filename: str = 'pillar.nc',
-                   start_pulse: float = 0.1):
+def close():
+    """Close ADS only; does not disable power or guarantee a machine stop."""
+    global plc, _io
+    if _io is None:
+        return
+    if not _operation_lock.acquire(blocking=False):
+        raise RuntimeError("Cannot close while a motion function is running")
     try:
-        
-        # GCODE mode
-        while not isReady.read():
-            time.sleep(0.5)
-        OpMode.write(2)
-        # print('bb')
-        time.sleep(0.5)
-        while not isReady.read():
-            # print('aaa')
-            time.sleep(0.5)
+        _io.close()
+        _io = plc = None
+        for v in ALL_VARS:
+            v._symbol = None
+    finally:
+        _operation_lock.release()
 
-        SingleGCodeMode.write(True)
-        # 파일명 전달
-        CodeName.write('\\\\'+filename)
 
-        # Start pulse
-        SingleGCodeTRG.write(True)
-        time.sleep(start_pulse)
+def validate_gcode_path(controller, filename):
+    """Check the PLC-side directory; no upload and no local existence assumption."""
+    import ntpath
+    from PLC_communication import GCODE_BASE_PATH
+    from Test_Q1_motion import basename, U
+    basename(filename)
+    actual = controller.r(U + 'GCodeBasePath')
+    if ntpath.normcase(ntpath.normpath(actual)) != ntpath.normcase(ntpath.normpath(GCODE_BASE_PATH)):
+        raise RuntimeError(f"PLC GCodeBasePath mismatch: {actual!r}; expected {GCODE_BASE_PATH!r}")
+    # PLC CONCAT returns STRING(255), including its existing doubled separators.
+    if len(actual) + 2 + len(filename) > 255:
+        raise ValueError("PLC G-code path exceeds STRING(255)")
+    return ntpath.join(GCODE_BASE_PATH, filename)
 
-        while isReady.read():
-            time.sleep(0.5)
 
+def _positive(value, name):
+    import math
+    if isinstance(value, bool) or not math.isfinite(float(value)) or float(value) <= 0:
+        raise ValueError(f"{name} must be a finite positive number")
+    return float(value)
+
+
+def _execute(kind, action, *, check_q1=True):
+    from Test_Q1_motion import Q1Test
+    io = _connected()
+    if not _operation_lock.acquire(blocking=False):
+        raise RuntimeError("Another operation is running in this process")
+    controller = Q1Test(io, check_q1=check_q1)
+    try:
+        controller.preflight(kind)
+        return action(controller)
+    except BaseException:
+        if controller.owned:
+            controller.abort()
+        raise
+    finally:
+        _operation_lock.release()
+
+
+def run_gcode(filename='test.nc', *, use_q1=False, allow_xyz_init=False, timeout=600.0):
+    """Execute one PLC-side .nc file; return True only after completion/group removal.
+
+    use_q1=True explicitly enables/commissions Q1 for this run. Without it, Q1
+    faults/power are not a prerequisite for XYZ execution. The caller must know
+    whether the file contains Q1 commands; remote file contents are not inspected.
+    allow_xyz_init=True permits entering mode 2 from mode 0/1 (XYZ referencing).
+    This blocking API raises on errors/timeouts; it never silently retries motion.
+    """
+    from Test_Q1_motion import basename, M, U
+    basename(filename)
+    timeout = _positive(timeout, 'timeout')
+    if not isinstance(use_q1, bool) or not isinstance(allow_xyz_init, bool):
+        raise TypeError('use_q1 and allow_xyz_init must be bool')
+    def action(c):
+        validate_gcode_path(c, filename)
+        if (c.state(), c.r(U+'OpMode')) != (200, 2) and not allow_xyz_init:
+            raise RuntimeError('Entering G-code mode may reference XYZ; pass allow_xyz_init=True')
+        c.gcode(filename, timeout, use_q1=use_q1)
         return True
-    
-    except Exception as e:
-        print("running gcode failed:", e)
-        return False
-    
-
-    
-# def run_gcode_file(filename: str = 'pillar.nc',
-#                    start_pulse: float = 0.1):
-#     try:
-#         # GCODE mode
-#         OpMode.write(2)
-
-#         # 파일명 전달
-#         SingleGCodeMode.write(filename)
-
-#         # Start pulse
-#         SingleGCodeTRG.write(True)
-#         time.sleep(start_pulse)
-#         SingleGCodeTRG.write(False)
-
-#         return True
-    
-#     except Exception as e:
-#         print("running gcode failed:", e)
-#         return False
-       
+    return _execute('gcode', action, check_q1=use_q1)
 
 
+def run_gcode_file(filename='pillar.nc', start_pulse=0.1, **kwargs):
+    """Compatibility name; now BLOCKS until complete and raises on failure.
 
-def wait_ready(timeout: float = 600.0, poll: float = 0.05):
-    t0 = time.time()
-    while not isReady.read():
-        if time.time() - t0 > timeout:
-            raise RuntimeError("Timeout waiting for GCodeReady")
+    start_pulse is accepted for old callers but no longer generates a timed pulse:
+    PLC state 200 consumes SingleGCodeTRG. Pass the same options as run_gcode().
+    """
+    _positive(start_pulse, 'start_pulse')
+    return run_gcode(filename, **kwargs)
+
+
+def jog_q1(*, velocity, seconds, direction='+'):
+    """Timed Q1 jog in idle state 0/100. NC units/s; maximum 2 seconds.
+
+    Calling explicitly confirms Q1 commissioning. ADS loss/process termination
+    can leave a Jog request active: this timer is NOT a PLC watchdog.
+    """
+    velocity = _positive(velocity, 'velocity')
+    seconds = _positive(seconds, 'seconds')
+    if seconds > 2 or direction not in ('+', '-'):
+        raise ValueError("seconds must be <= 2 and direction must be '+' or '-'")
+    def action(c):
+        c.jog(velocity, seconds, 1 if direction == '+' else -1)
+        return True
+    return _execute('jog', action)
+
+
+def disable_q1():
+    """Remove Q1 software power permission only when idle and unreserved."""
+    def action(c):
+        c.disable()
+        return True
+    return _execute('disable', action)
+
+
+def get_status():
+    """Read diagnostics; raise on unavailable symbols/ADS failure."""
+    from Test_Q1_motion import STATUS_TAGS
+    io = _connected()
+    return {name: io.read(name) for name in STATUS_TAGS}
+
+
+def wait_ready(timeout=600.0, poll=0.05):
+    """Wait for PLC idle; this alone is not evidence that a new request ran."""
+    from Test_Q1_motion import Q1Test, M, U
+    timeout = _positive(timeout, 'timeout')
+    poll = _positive(poll, 'poll')
+    c = Q1Test(_connected(), check_q1=False)
+    deadline = time.monotonic() + timeout
+    while True:
+        c.fault_check()
+        if (c.state(), c.r(U+'OpMode')) in ((0, 0), (100, 1), (200, 2)) and not c.r(M+'bBusy') and not c.r(M+'bQ1Reserved') and not c.r(U+'SingleGCodeTRG'):
+            return True
+        if time.monotonic() >= deadline:
+            raise TimeoutError('Timeout waiting for PLC idle')
         time.sleep(poll)
-
-
